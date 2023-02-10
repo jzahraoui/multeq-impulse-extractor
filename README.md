@@ -6,7 +6,7 @@
 
 ## How to install multeq-impulse-extractor
 
-* Install it using pip (recommended):
+- Install it using pip (recommended):
 
 ```bash
 pip install git+https://github.com/jzahraoui/multeq-impulse-extractor.git
@@ -14,10 +14,11 @@ pip install git+https://github.com/jzahraoui/multeq-impulse-extractor.git
 
 make sure $HOME/.local/bin/ is in your $PATH variable.
 
-* Clone the repository and install it using the following command (Python3 and pip needed):
+- Clone the repository and install it using the following command (Python3 and pip needed):
 
 ```bash
-sudo python3 setup.py install --record files.txt
+python3 -m build
+pip install dist/multeq_impulse_extractor-1.0.5-py3-none-any.whl
 ```
 
 ## use
@@ -36,10 +37,4 @@ the generated files can be directly used by REW
 
 ```bash
 pip uninstall multeq-impulse-extractor
-```
-
-or if you didn't use pip:
-
-```bash
-sudo xargs rm -rf < files.txt
 ```

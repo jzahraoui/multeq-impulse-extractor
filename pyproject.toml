@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name="multeq-impulse-extractor"
+version="1.0.5"
+authors = [
+  { name="Jaoued ZAHRAOUI", email="jzahraoui@gmail.com" },
+]
+description="creates rew impulse txt files from multeq ady file"
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache License",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.7"
+keywords = ["denon", "xt32", "multeq", "mult-eq", "audyssey"]
+license = {file = "LICENSE"}
+dependencies = []
+
+[project.scripts]
+multeq-impulse-extractor = "multeq_impulse_extractor.extract:main"
+
+[project.urls]
+"Homepage" = "https://github.com/jzahraoui/multeq-impulse-extractor"
+"Bug Tracker" = "https://github.com/jzahraoui/multeq-impulse-extractor/issues"
