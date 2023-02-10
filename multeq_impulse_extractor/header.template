@@ -1,0 +1,12 @@
+* Impulse Response data saved by REW
+* IR is not normalised
+* IR window has not been applied
+* IR is not the min phase version
+* Excitation: Imported Impulse Response, 48000.0 Hz sampling
+* Response measured over: 2,9 to 24 000,0 Hz
+0 // Peak value before normalisation
+0 // Peak index
+16384 // Response length
+2.0833333333333333E-5 // Sample interval (seconds)
+0.0 // Start time (seconds)
+* Data start

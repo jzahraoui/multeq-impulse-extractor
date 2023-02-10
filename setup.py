@@ -48,5 +48,6 @@ setup(
     license='Apache',
     install_requires=find_required(),
     include_package_data=True,
-    zip_safe=False
+    zip_safe=False,
+    data_files=['multeq_impulse_extractor/header.template', 'multeq_impulse_extractor/perfect_speaker.json']
 )

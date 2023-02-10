@@ -1,6 +1,8 @@
 # multeq-impulse-extractor
 
-creates rew impulse txt files from multeq ady file
+- creates REW compatible impulse txt files from multeq ady file
+- create a new ady file with perfect speakers response for all mesurement positions.
+- import REW format txt mesurement files to custom target curves, this files must be placed in a folder named "filter" and must be named by multeq chanel name (ex. C.txt  FL.txt  FR.txt  SBL.txt  SBR.txt  SLA.txt  SRA.txt  SW1.txt  TFL.txt  TFR.txt  TRL.txt  TRR.txt)
 
 ## How to install multeq-impulse-extractor
 
