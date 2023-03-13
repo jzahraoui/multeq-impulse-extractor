@@ -81,6 +81,30 @@ class adyTool:
 
         print("done")
 
+    def extract_curve_filter(self, dest_dir: str, in_json, key: str):
+        print("extracting curve filter data...", end="")
+
+        if "referenceCurveFilter" not in key:
+            return
+
+        with open(header_template_file, 'r') as header_file:
+            header = header_file.read()
+            header_file.close()
+
+        channels = dict((item['commandId'], item)
+                        for item in in_json['detectedChannels'])
+        for speaker, channel in channels.items():
+            for measurement, data in channel[key].items():
+                str_data = [str(val) for val in data]
+                # print(impulse_response)
+                with open('%s%s%s_%s.txt' % (dest_dir, os.sep, measurement, speaker), 'w') as fp:
+                    fp.write(header)
+                    fp.write('\n')
+                    fp.write('\n'.join(str_data))
+                    fp.close()
+
+        print("done")
+
     def extract_freq(self, in_json, dest_dir: str):
         print("extracting response data to frequencie format...", end="")
 
@@ -154,13 +178,43 @@ class adyTool:
                         continue
                     if line.startswith('*'):
                         continue
-                    line_values = line.rstrip().replace('\t',' ').split(' ')
+                    line_values = line.replace('\t', ' ').rstrip().split(' ')
                     filter_data.append('{%s, %s}' %
                                        (line_values[0], line_values[1]))
                 in_json['detectedChannels'][i]['customTargetCurvePoints'] = filter_data
                 print(speaker + " imported successfully")
 
         print("inject filters done")
+
+        return in_json
+
+    def inject_response(self, in_json, response_source_dir):
+        print("inject response data...")
+
+        detected_channel_count = len(in_json['detectedChannels'])
+
+        for i in range(0, detected_channel_count):
+            speaker = in_json['detectedChannels'][i]['commandId']
+
+            responses_files = [f.name for f in os.scandir(
+                response_source_dir) if (f.is_file() & f.name.endswith("_"+speaker+".txt"))]
+            for filename in list(responses_files):
+                position_index = filename[0]
+                with open(response_source_dir + os.sep + filename, 'r', encoding="ISO-8859-1") as fp:
+                    filter_data = []
+                    for line in fp:
+                        if '\n' == line:
+                            continue
+                        if line.startswith('*'):
+                            continue
+                        if "//" in line:
+                            continue
+                        line_value = line.replace('\t', ' ').rstrip()
+                        filter_data.append(line_value)
+                    in_json['detectedChannels'][i]['responseData'][position_index] = filter_data
+                    print(filename + " imported successfully")
+
+        print("inject response done")
 
         return in_json
 
@@ -186,6 +240,16 @@ class adyTool:
 
         in_json = self.get_from_edit()
         self.extract(dest_dir, in_json)
+
+    def extract_curve_filter_action(self):
+        dest_dir = askdirectory(
+            title="Destination folder", parent=self.window, mustexist=True)
+
+        if not dest_dir:
+            return
+
+        in_json = self.get_from_edit()
+        self.extract_curve_filter(dest_dir, in_json, "referenceCurveFilter")
 
     def extract_freq_action(self):
         dest_dir = askdirectory(
@@ -217,6 +281,17 @@ class adyTool:
         in_json = self.get_from_edit()
         out_json = self.inject_filters(
             in_json=in_json, filter_source_dir=filter_source_dir)
+        self.refresh_edit(out_json)
+
+    def inject_response_action(self):
+        response_source_dir = askdirectory(parent=self.window,
+                                           title="Source folder", mustexist=True)
+
+        if not response_source_dir:
+            return
+
+        in_json = self.get_from_edit()
+        out_json = self.inject_response(in_json, response_source_dir)
         self.refresh_edit(out_json)
 
     def load_file(self):
@@ -301,27 +376,31 @@ class adyTool:
         btn_save = tk.Button(frm_buttons, text="Save As...",
                              command=self.save_file)
 
-        btn_clean = tk.Button(frm_buttons, text="clean",
+        btn_clean = tk.Button(frm_buttons, text="set perfect responses",
                               command=self.clean_response_action)
-        btn_default = tk.Button(frm_buttons, text="default",
+        btn_default = tk.Button(frm_buttons, text="set defaults settings",
                                 command=self.default_action)
-        btn_extract = tk.Button(frm_buttons, text="extract",
+        btn_extract = tk.Button(frm_buttons, text="export IRs",
                                 command=self.extract_action)
         btn_inject_filters = tk.Button(
-            frm_buttons, text="inject filters", command=self.inject_filters_action)
-        btn_create_filters = tk.Button(frm_buttons, text="create filters")
+            frm_buttons, text="import target curves", command=self.inject_filters_action)
+        btn_inject_response = tk.Button(
+            frm_buttons, text="import responses", command=self.inject_response_action)
         btn_extract_freq = tk.Button(
-            frm_buttons, text="extract freq", command=self.extract_freq_action)
+            frm_buttons, text="export responses", command=self.extract_freq_action)
+        btn_extract_cf = tk.Button(
+            frm_buttons, text="export curve filters", command=self.extract_curve_filter_action)
 
         btn_open.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
         btn_save.grid(row=1, column=0, sticky="ew", padx=5)
 
-        btn_clean.grid(row=2, column=0, sticky="ew", padx=5, pady=5)
-        btn_default.grid(row=3, column=0, sticky="ew", padx=5)
-        btn_extract.grid(row=4, column=0, sticky="ew", padx=5, pady=5)
-        btn_inject_filters.grid(row=5, column=0, sticky="ew", padx=5)
-        # btn_create_filters.grid(row=6, column=0, sticky="ew", padx=5, pady=5)
-        btn_extract_freq.grid(row=7, column=0, sticky="ew", padx=5, pady=5)
+        btn_default.grid(row=2, column=0, sticky="ew", padx=5, pady=5)
+        btn_inject_filters.grid(row=3, column=0, sticky="ew", padx=5)
+        btn_clean.grid(row=4, column=0, sticky="ew", padx=5, pady=5)
+        btn_inject_response.grid(row=5, column=0, sticky="ew", padx=5)
+        btn_extract.grid(row=6, column=0, sticky="ew", padx=5, pady=5)
+        btn_extract_freq.grid(row=7, column=0, sticky="ew", padx=5)
+        btn_extract_cf.grid(row=8, column=0, sticky="ew", padx=5, pady=5)
 
         frm_buttons.grid(row=0, column=0, sticky="ns")
         self.txt_edit.grid(row=0, column=1, sticky="nsew")
