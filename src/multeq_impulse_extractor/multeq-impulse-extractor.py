@@ -10,11 +10,9 @@ import numpy as np
 import tkinter as tk
 from tkinter.filedialog import askdirectory, askopenfilename, asksaveasfilename
 import orjson
+import re
 
 script_dir = os.path.dirname(__file__)
-header_template_file = os.path.join(script_dir, 'header.template')
-perfect_speaker_file = os.path.join(script_dir, 'perfect_speaker.json')
-title = "multeq-impulse-extractor"
 
 
 @dataclasses.dataclass
@@ -26,6 +24,12 @@ class Config:
 
 
 class adyTool:
+
+    header_template_file = 'header.template'
+    application_title = 'multeq-impulse-extractor'
+    header = ''
+    in_json = {}
+
     def __init__(self, config: Config):
         self.config: Config = config
 
@@ -41,51 +45,77 @@ class adyTool:
 
         with open(in_file, 'rb') as jsonFile:
             # Read the JSON into the buffer
-            in_json = orjson.loads(jsonFile.read())
+            self.in_json = orjson.loads(jsonFile.read())
 
         if self.config.extract:
-            self.extract(in_file_wo_ext, in_json)
+            self.extract(in_file_wo_ext)
         if self.config.default:
-            in_json = self.default(in_json)
+            self.default()
         if self.config.clean:
-            in_json = self.clean_response(in_json)
+            self.clean_response()
         if self.config.filter:
             if not self.config.filter.is_dir():
                 raise RuntimeError(
                     f'Incorrect path to filter directory: {self.config.filter.absolute()}')
-            in_json = self.inject_filters(in_json, self.config.filter.name)
+            self.inject_target_curve(self.config.filter.name)
 
         # Save our changes to JSON file
         with open(out_file, "w+") as outjsonFile:
-            json.dump(in_json, outjsonFile)
+            json.dump(self.in_json, outjsonFile)
             outjsonFile.close()
             print("output file succefull: " + outjsonFile.name)
 
-    def extract(self, dest_dir: str, in_json):
+    def extract(self, dest_dir: str):
         print("extracting response data...", end="")
 
-        with open(header_template_file, 'r') as header_file:
-            header = header_file.read()
-            header_file.close()
-
         channels = dict((item['commandId'], item)
-                        for item in in_json['detectedChannels'])
+                        for item in self.in_json['detectedChannels'])
         for speaker, channel in channels.items():
             for measurement, data in channel['responseData'].items():
                 # print(impulse_response)
                 with open('%s%s%s_%s.txt' % (dest_dir, os.sep, measurement, speaker), 'w') as fp:
-                    fp.write(header)
+                    fp.write(self.getHeaderContent())
                     fp.write('\n')
                     fp.write('\n'.join(data))
                     fp.close()
 
         print("done")
 
-    def extract_freq(self, in_json, dest_dir: str):
+    def extract_curve_filter(self, dest_dir: str, key: str):
+        print("extracting curve filter data...", end="")
+
+        if ('referenceCurveFilter' != key) and ('flatCurveFilter' != key):
+            print("key " + key + "not valid")
+            return
+
+        channels = dict((item['commandId'], item)
+                        for item in self.in_json['detectedChannels'])
+        for speaker, channel in channels.items():
+            for measurement, data in channel[key].items():
+                str_data = [str(val) for val in data]
+                # print(impulse_response)
+                with open('%s%s%s_%s.txt' % (dest_dir, os.sep, measurement, speaker), 'w') as fp:
+                    fp.write(self.getHeaderContent())
+                    fp.write('\n')
+                    fp.write('\n'.join(str_data))
+                    fp.close()
+
+        print("done")
+
+    def getHeaderContent(self):
+        if self.header == '':
+            header_path_file = os.path.join(
+                script_dir, self.header_template_file)
+            with open(header_path_file, 'r') as header_file:
+                self.header = header_file.read()
+                header_file.close()
+        return self.header
+
+    def extract_freq(self, dest_dir: str):
         print("extracting response data to frequencie format...", end="")
 
         channels = dict((item['commandId'], item)
-                        for item in in_json['detectedChannels'])
+                        for item in self.in_json['detectedChannels'])
         for speaker, channel in channels.items():
             for measurement, data in channel['responseData'].items():
                 data_nbr = [float(val) for val in data]
@@ -103,45 +133,46 @@ class adyTool:
                     freq, spl, phase], fmt=rew_fmt, comments='*', header='Frequency Step: %s Hz' % step)
         print("done")
 
-    def default(self, in_json):
+    def default(self):
         print("reseting default values...", end="")
 
-        detected_channel_count = len(in_json['detectedChannels'])
+        detected_channel_count = len(self.in_json['detectedChannels'])
 
         for i in range(0, detected_channel_count):
-            in_json['detectedChannels'][i]['customDistance'] = '3'
-            in_json['detectedChannels'][i]['customLevel'] = '0'
-            in_json['detectedChannels'][i]['customCrossover'] = 'F'
-            in_json['detectedChannels'][i]['customSpeakerType'] = 'L'
-            in_json['detectedChannels'][i]['midrangeCompensation'] = 'false'
+            self.in_json['detectedChannels'][i]['customDistance'] = '3'
+            self.in_json['detectedChannels'][i]['customLevel'] = '0'
+            self.in_json['detectedChannels'][i]['customCrossover'] = 'F'
+            self.in_json['detectedChannels'][i]['customSpeakerType'] = 'L'
+            self.in_json['detectedChannels'][i]['midrangeCompensation'] = 'false'
 
         print("done")
 
-        return in_json
+    def create_perfect_response(self):
+        perfect_speaker_data = []
+        perfect_speaker_data.append('1')
+        for i in range(0, 16383):
+            perfect_speaker_data.append('0')
+        return perfect_speaker_data
 
-    def clean_response(self, in_json):
+    def clean_response(self):
         print("set perfect speaker response data...", end="")
 
-        with open(perfect_speaker_file, 'rb') as perfect_speaker:
-            perfect_speaker_data = orjson.loads(perfect_speaker.read())
-
-        detected_channel_count = len(in_json['detectedChannels'])
+        perfect_speaker_data = self.create_perfect_response()
+        detected_channel_count = len(self.in_json['detectedChannels'])
 
         for i in range(0, detected_channel_count):
-            for measurement, data in in_json['detectedChannels'][i]['responseData'].items():
-                in_json['detectedChannels'][i]['responseData'][measurement] = perfect_speaker_data
+            for measurement in self.in_json['detectedChannels'][i]['responseData'].keys():
+                self.in_json['detectedChannels'][i]['responseData'][measurement] = perfect_speaker_data
 
         print("done")
 
-        return in_json
-
-    def inject_filters(self, in_json, filter_source_dir):
+    def inject_target_curve(self, filter_source_dir):
         print("inject filters...")
 
-        detected_channel_count = len(in_json['detectedChannels'])
+        detected_channel_count = len(self.in_json['detectedChannels'])
 
         for i in range(0, detected_channel_count):
-            speaker = in_json['detectedChannels'][i]['commandId']
+            speaker = self.in_json['detectedChannels'][i]['commandId']
             speaker_filter_file = filter_source_dir + os.sep + speaker + '.txt'
             if not os.path.exists(speaker_filter_file):
                 print("cannot access '%s': No such file or directory, skipping" % (
@@ -154,23 +185,85 @@ class adyTool:
                         continue
                     if line.startswith('*'):
                         continue
-                    line_values = line.rstrip().replace('\t',' ').split(' ')
+                    line_values = line.replace('\t', ' ').rstrip().split(' ')
                     filter_data.append('{%s, %s}' %
                                        (line_values[0], line_values[1]))
-                in_json['detectedChannels'][i]['customTargetCurvePoints'] = filter_data
+                self.in_json['detectedChannels'][i]['customTargetCurvePoints'] = filter_data
                 print(speaker + " imported successfully")
 
         print("inject filters done")
 
-        return in_json
+    def inject_response(self, response_source_dir):
+        print("inject response data...")
 
-    def refresh_edit(self, in_json):
+        detected_channel_count = len(self.in_json['detectedChannels'])
+
+        for i in range(0, detected_channel_count):
+            speaker = self.in_json['detectedChannels'][i]['commandId']
+
+            regex = re.compile(r"^\d_" + re.escape(speaker) + r".txt")
+
+            responses_files = [f.name for f in os.scandir(
+                response_source_dir) if (f.is_file() and regex.match(f.name) is not None)]
+            for filename in list(responses_files):
+                position_index = filename[0]
+                with open(response_source_dir + os.sep + filename, 'r', encoding="ISO-8859-1") as fp:
+                    filter_data = []
+                    for line in fp:
+                        if '\n' == line:
+                            continue
+                        if line.startswith('*'):
+                            continue
+                        if "//" in line:
+                            continue
+                        line_value = line.replace('\t', ' ').rstrip()
+                        filter_data.append(line_value)
+                    self.in_json['detectedChannels'][i]['responseData'][position_index] = filter_data
+                    print(filename + " imported successfully")
+
+        print("inject response done")
+
+    def inject_curve_filters(self, response_source_dir, key: str):
+        print("inject curve filters data...")
+
+        if ('referenceCurveFilter' != key) and ('flatCurveFilter' != key):
+            print("key " + key + "not valid")
+            return
+
+        detected_channel_count = len(self.in_json['detectedChannels'])
+
+        for i in range(0, detected_channel_count):
+            speaker = self.in_json['detectedChannels'][i]['commandId']
+
+            regex = re.compile(r"^\w{9,}_" + re.escape(speaker) + r".txt")
+
+            responses_files = [f.name for f in os.scandir(
+                response_source_dir) if (f.is_file() and regex.match(f.name) is not None)]
+            for filename in list(responses_files):
+                position_index = filename.split('_')[0]
+                with open(response_source_dir + os.sep + filename, 'r', encoding="ISO-8859-1") as fp:
+                    filter_data = []
+                    for line in fp:
+                        if '\n' == line:
+                            continue
+                        if line.startswith('*'):
+                            continue
+                        if "//" in line:
+                            continue
+                        line_value = line.replace('\t', ' ').rstrip()
+                        filter_data.append(line_value)
+                    self.in_json['detectedChannels'][i][key][position_index] = filter_data
+                    print(filename + " imported successfully")
+
+        print("inject response done")
+
+    def refresh_edit(self):
         # for Lines in in_json: # Around 3 millions iterations
         #     self.txt_edit.delete(f'{Lines}.0', f'{Lines}.end+1c')
         #     self.txt_edit.insert(f'{Lines}.0', Lines)
         self.txt_edit.config(state=tk.NORMAL)
         self.txt_edit.delete("1.0", tk.END)
-        self.txt_edit.insert("1.0", json.dumps(in_json, indent=2))
+        self.txt_edit.insert("1.0", json.dumps(self.in_json, indent=2))
         self.txt_edit.config(state=tk.DISABLED)
 
     def get_from_edit(self):
@@ -184,8 +277,16 @@ class adyTool:
         if not dest_dir:
             return
 
-        in_json = self.get_from_edit()
-        self.extract(dest_dir, in_json)
+        self.extract(dest_dir)
+
+    def extract_curve_filter_action(self):
+        dest_dir = askdirectory(
+            title="Destination folder", parent=self.window, mustexist=True)
+
+        if not dest_dir:
+            return
+
+        self.extract_curve_filter(dest_dir, "referenceCurveFilter")
 
     def extract_freq_action(self):
         dest_dir = askdirectory(
@@ -194,30 +295,45 @@ class adyTool:
         if not dest_dir:
             return
 
-        in_json = self.get_from_edit()
-        self.extract_freq(in_json=in_json, dest_dir=dest_dir)
+        self.extract_freq(dest_dir=dest_dir)
 
     def default_action(self):
-        in_json = self.get_from_edit()
-        out_json = self.default(in_json)
-        self.refresh_edit(out_json)
+        self.default()
+        self.refresh_edit()
 
     def clean_response_action(self):
-        in_json = self.get_from_edit()
-        out_json = self.clean_response(in_json)
-        self.refresh_edit(out_json)
+        self.clean_response()
+        self.refresh_edit()
 
-    def inject_filters_action(self):
+    def inject_target_curve_action(self):
         filter_source_dir = askdirectory(parent=self.window,
                                          title="Source folder", mustexist=True)
 
         if not filter_source_dir:
             return
 
-        in_json = self.get_from_edit()
-        out_json = self.inject_filters(
-            in_json=in_json, filter_source_dir=filter_source_dir)
-        self.refresh_edit(out_json)
+        self.inject_target_curve(filter_source_dir)
+        self.refresh_edit()
+
+    def inject_response_action(self):
+        response_source_dir = askdirectory(parent=self.window,
+                                           title="Source folder", mustexist=True)
+
+        if not response_source_dir:
+            return
+
+        self.inject_response(response_source_dir)
+        self.refresh_edit()
+
+    def inject_curve_filter_action(self):
+        response_source_dir = askdirectory(parent=self.window,
+                                           title="Source folder", mustexist=True)
+
+        if not response_source_dir:
+            return
+
+        self.inject_curve_filters(response_source_dir, "referenceCurveFilter")
+        self.refresh_edit()
 
     def load_file(self):
         in_file = askopenfilename(title="Open Your musurement file", parent=self.window,
@@ -227,17 +343,17 @@ class adyTool:
         if not in_file:
             return
 
-        in_json = {}
+        self.in_json = {}
         try:
             with open(in_file, 'rb') as jsonFile:
                 # Read the JSON into the buffer
-                in_json = orjson.loads(jsonFile.read())
+                self.in_json = orjson.loads(jsonFile.read())
                 jsonFile.close()
         except FileNotFoundError():
             print(e)
 
-        self.refresh_edit(in_json)
-        self.set_title(f"{title} - {in_file}")
+        self.refresh_edit()
+        self.set_title(f"{self.application_title} - {in_file}")
 
     def save_file(self):
         """Save the current file as a new file."""
@@ -249,11 +365,10 @@ class adyTool:
         if not filepath:
             return
 
-        in_json = self.get_from_edit()
         with open(filepath, mode="w", encoding="utf-8") as output_file:
-            json.dump(in_json, output_file)
+            json.dump(self.in_json, output_file)
 
-        self.set_title(f"{title} - {filepath}")
+        self.set_title(f"{self.application_title} - {filepath}")
 
     def toggle_detail_view(self):
         """
@@ -278,7 +393,7 @@ class adyTool:
 
         self.window = tk.Tk()
 
-        self.set_title(title)
+        self.set_title(self.application_title)
 
         self.window.rowconfigure(0, minsize=800, weight=1)
         self.window.columnconfigure(1, minsize=800, weight=1)
@@ -301,27 +416,34 @@ class adyTool:
         btn_save = tk.Button(frm_buttons, text="Save As...",
                              command=self.save_file)
 
-        btn_clean = tk.Button(frm_buttons, text="clean",
+        btn_clean = tk.Button(frm_buttons, text="set perfect responses",
                               command=self.clean_response_action)
-        btn_default = tk.Button(frm_buttons, text="default",
+        btn_default = tk.Button(frm_buttons, text="set defaults settings",
                                 command=self.default_action)
-        btn_extract = tk.Button(frm_buttons, text="extract",
+        btn_extract = tk.Button(frm_buttons, text="export IRs",
                                 command=self.extract_action)
-        btn_inject_filters = tk.Button(
-            frm_buttons, text="inject filters", command=self.inject_filters_action)
-        btn_create_filters = tk.Button(frm_buttons, text="create filters")
+        btn_inject_target_curve = tk.Button(
+            frm_buttons, text="import target curves", command=self.inject_target_curve_action)
+        btn_inject_response = tk.Button(
+            frm_buttons, text="import responses", command=self.inject_response_action)
         btn_extract_freq = tk.Button(
-            frm_buttons, text="extract freq", command=self.extract_freq_action)
+            frm_buttons, text="export responses", command=self.extract_freq_action)
+        btn_extract_cf = tk.Button(
+            frm_buttons, text="export curve filters", command=self.extract_curve_filter_action)
+        btn_inject_cf = tk.Button(
+            frm_buttons, text="import curve filters", command=self.inject_curve_filter_action)
 
         btn_open.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
         btn_save.grid(row=1, column=0, sticky="ew", padx=5)
 
-        btn_clean.grid(row=2, column=0, sticky="ew", padx=5, pady=5)
-        btn_default.grid(row=3, column=0, sticky="ew", padx=5)
-        btn_extract.grid(row=4, column=0, sticky="ew", padx=5, pady=5)
-        btn_inject_filters.grid(row=5, column=0, sticky="ew", padx=5)
-        # btn_create_filters.grid(row=6, column=0, sticky="ew", padx=5, pady=5)
-        btn_extract_freq.grid(row=7, column=0, sticky="ew", padx=5, pady=5)
+        btn_default.grid(row=2, column=0, sticky="ew", padx=5, pady=5)
+        btn_inject_target_curve.grid(row=3, column=0, sticky="ew", padx=5)
+        btn_clean.grid(row=4, column=0, sticky="ew", padx=5, pady=5)
+        btn_inject_response.grid(row=5, column=0, sticky="ew", padx=5)
+        btn_extract.grid(row=6, column=0, sticky="ew", padx=5, pady=5)
+        btn_extract_freq.grid(row=7, column=0, sticky="ew", padx=5)
+        btn_extract_cf.grid(row=8, column=0, sticky="ew", padx=5, pady=5)
+        btn_inject_cf.grid(row=9, column=0, sticky="ew", padx=5)
 
         frm_buttons.grid(row=0, column=0, sticky="ns")
         self.txt_edit.grid(row=0, column=1, sticky="nsew")
