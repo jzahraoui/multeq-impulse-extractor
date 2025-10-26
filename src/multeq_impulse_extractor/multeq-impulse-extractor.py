@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter.filedialog import askdirectory, askopenfilename, asksaveasfilename
 import orjson
 import re
+from tkinter import ttk
 
 script_dir = os.path.dirname(__file__)
 
@@ -261,10 +262,13 @@ class adyTool:
         # for Lines in in_json: # Around 3 millions iterations
         #     self.txt_edit.delete(f'{Lines}.0', f'{Lines}.end+1c')
         #     self.txt_edit.insert(f'{Lines}.0', Lines)
-        self.txt_edit.config(state=tk.NORMAL)
-        self.txt_edit.delete("1.0", tk.END)
-        self.txt_edit.insert("1.0", json.dumps(self.in_json, indent=2))
-        self.txt_edit.config(state=tk.DISABLED)
+        # self.txt_edit.config(state=tk.NORMAL)
+        # self.txt_edit.delete("1.0", tk.END)
+        # self.txt_edit.insert("1.0", json.dumps(self.in_json, indent=2))
+        # self.txt_edit.config(state=tk.DISABLED)
+
+        frame = self.create_tab()
+        frame.grid(row=0, column=1, sticky="nsew")
 
     def get_from_edit(self):
         text = self.txt_edit.get("1.0", tk.END)
@@ -389,6 +393,68 @@ class adyTool:
         """
         self.window.title(title)
 
+    def create_tab(self):
+        frame = tk.Frame(self.window)
+
+        if not self.in_json:
+            return frame
+
+        detected_channel_count = len(self.in_json['detectedChannels'])
+
+        for i in range(0, detected_channel_count):
+            j = 0
+
+            speaker = self.in_json['detectedChannels'][i]['commandId']
+            tk.Label(frame, text=speaker, anchor='w').grid(row=i, column=j)
+            j += 1
+
+            if 'customDistance' in self.in_json['detectedChannels'][i]:
+                customDistance_var = tk.Variable(master=frame, value=self.in_json['detectedChannels'][i]['customDistance'])                
+            else:
+                customDistance_var = tk.Variable(master=frame, value='')
+            tk.Entry(frame, textvariable=customDistance_var).grid(row=i, column=j)
+            j += 1
+
+            if 'customLevel' in self.in_json['detectedChannels'][i]:
+                customLevel = tk.StringVar(master=frame, value=self.in_json['detectedChannels'][i]['customLevel'])
+            else:
+                customLevel = tk.StringVar(master=frame, value='')
+            tk.Entry(frame, textvariable=customLevel).grid(row=i, column=j)
+            j += 1
+
+            if 'customSpeakerType' in self.in_json['detectedChannels'][i]:
+                customSpeakerType = self.in_json['detectedChannels'][i]['customSpeakerType']
+            else:
+                customSpeakerType = ''
+            customSpeakerType_var = tk.StringVar(master=frame)
+            combobox = ttk.Combobox(frame, textvariable=customSpeakerType_var)
+            combobox['state'] = 'readonly'
+            combobox.grid(row=i, column=j)
+            combobox['values'] = ['', 'S', 'L']
+            combobox.set(customSpeakerType)
+
+            j += 1
+
+            if 'customCrossover' in self.in_json['detectedChannels'][i]:
+                customCrossover = self.in_json['detectedChannels'][i]['customCrossover']
+            else:
+                customCrossover = ''
+            tk.Label(frame, text=customCrossover).grid(row=i, column=j)
+            j += 1
+
+            midrangeCompensation_var = tk.BooleanVar(master=frame, value=self.in_json['detectedChannels'][i]['midrangeCompensation'])
+            Checkbutton = tk.Checkbutton(frame, name='checkButton'+speaker,
+                                         variable=midrangeCompensation_var,
+                                         onvalue=True, offvalue=False,
+                                         command=self.display_status)
+            Checkbutton.grid(row=i, column=j)
+            j += 1
+
+        return frame
+
+    def display_status(self, event):
+        print(event)
+
     def init_gui(self):
 
         self.window = tk.Tk()
@@ -446,7 +512,7 @@ class adyTool:
         btn_inject_cf.grid(row=9, column=0, sticky="ew", padx=5)
 
         frm_buttons.grid(row=0, column=0, sticky="ns")
-        self.txt_edit.grid(row=0, column=1, sticky="nsew")
+        # self.txt_edit.grid(row=0, column=1, sticky="nsew")
 
         show_detail = tk.IntVar()
         check_expand_all = tk.Checkbutton(self.window, text="Expand All", variable=show_detail, onvalue=1, offvalue=0,
